@@ -1,0 +1,66 @@
+#To fit the curve
+
+library(ggplot2) #for plotting
+library(reshape2)
+library(dplyr)
+library(emmeans) #for confidence interval
+library(dplyr) #for pipes
+library(MASS) #for prediction of infliction point with standard error
+
+
+##################
+#using raw data
+##################
+
+#read data
+
+Data <- read.csv('Budbreak_datafinal20212022.csv', sep = ",")
+
+###############################################################
+
+#bring date in Date format 
+Data$Collection <- as.Date(Data$Collection, format  = '%d/%m/%Y')
+Data$Collection <- as.Date(Data$Collection)
+
+#share of buds in bloom
+Data$share_budbreak <- Data$Buds_51_stage_BBCH / Data$Total_Buds
+
+#plot without fitted curve
+ggplot(Data, aes(x = Chill_Portions, y = share_budbreak)) + geom_point()
+
+#fit binomial model
+m2 <- glm(formula = share_budbreak ~ Chill_Portions, family = binomial, Data, weights=NULL )
+
+#get confidence interval
+yhat.df2 <- emmeans(m2, ~Chill_Portions, at=list(Chill_Portions=seq(0,91,by=.1)), type='response', by= 'Variety') %>%
+  as.data.frame()
+
+
+#plot fitted curve with confidence interval
+ggplot(Data, aes(x = Chill_Portions)) +
+  geom_ribbon(data = yhat.df2, aes(ymin = asymp.LCL, ymax = asymp.UCL), 
+              fill = 'blue', alpha = .4) +
+  geom_line( data = yhat.df2, aes( y = prob), color = 'blue') +
+  geom_point(aes(y = share_budbreak)) +
+  labs(y='Probability of Bud burst', x='Chill Accumulation (CP)')+
+  facet_grid(~ factor(Variety,levels = c("Early_Red_2021", "Tamara_2021", "Regina_2021","Early_Red_2022", "Tamara_2022", "Regina_2022"), 
+                      labels = c("Early Red 2022", "Tamara 2022", "Regina 2022, Early Red 2022", "Tamara 2022", "Regina 2022")))
+
+###########################################
+##I want to add b50 as "CR" (to each one)
+###########################################
++
+  geom_text(aes(x = 0, # es la posición del texto en el eje x
+                y = 1, # es la posición del texto en el eje y
+                label = "CR"), # es el texto que quieres agregar
+            size = 2) # es el tamaño de la letra
+
+
+#get chillportions at 50% budbreak
+b50 <- MASS::dose.p(m2, p=c(.5))
+b50
+#--> much smaller std
+
+
+
+
