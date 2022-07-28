@@ -1,0 +1,49 @@
+###To calculate Chill Portions with ChillR
+
+library(tidyverse)
+library(chillR)
+
+Data <- read.csv("XXXXX.csv", sep = ",")
+
+str(Data)
+
+Collection_days <- unique(Data$Collection)
+
+source("handle_cka_station.R")
+
+temps <- handle_cka_station("CKA_temperature_data_2022/", sep = ",",
+                            check_data = FALSE, time_step = "hourly")
+
+Chillportions <- c()
+
+for(days in Collection_days){
+  
+  Chillportion <- chilling(make_JDay(temps),Start_JDay = 275,
+                           End_JDay =  dormancyR::date_to_JDay(days, format = "%d/%m/%Y"))$Chill_portions
+  
+  Chillportions <- c(Chillportions, Chillportion)
+  
+}
+
+Chillportions_df <- data.frame(Date = Collection_days,
+                               Chillportions = Chillportions)
+
+Data_Chill <- Data %>% group_by(Collection) %>% nest() %>% 
+  left_join(Chillportions_df, by = c("Collection" = "Date")) %>% 
+  unnest(cols = c(data))
+
+Data_Chill$Collection <- as.Date.character(Data_Chill$Collection,
+                                           format = "%d/%m/%Y")
+
+Data_Chill$Measurement_day <- as.Date.character(Data_Chill$Measurement_day,
+                                                format = "%d/%m/%Y")
+
+Data_Chill["Bud_break"] <- (Data_Chill$Buds_51_stage_BBCH / Data_Chill$Total_Buds) * 100
+
+Data_Chill["Daysmesures"] <- Data_Chill$`Measurement_day` - Data_Chill$Collection
+
+Data_summarise <- Data_Chill %>% group_by(`Variety`, Collection, Chillportions) %>% 
+  summarise(Average_Budbreak = mean(Bud_break),
+            Min_Bud_Break = min(Bud_break),
+            Max_Bud_Break = max(Bud_break),
+            sd = sd(Bud_break))
